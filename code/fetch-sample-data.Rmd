@@ -1,0 +1,319 @@
+---
+title: "Fetch MOMS-PI 16S sample data"
+description: |
+  Fetch MOMS-PI 16S sample data associated with BioSample and SRA submission.
+author:
+  - name: Michael R. McLaren
+date: 2021-07-08
+draft: true
+output: html_document
+---
+
+```{r}
+library(here)
+library(tidyverse)
+library(fs)
+library(rentrez)
+library(xml2)
+```
+
+## Links
+
+Project website: http://vmc.vcu.edu/resources/momspi
+
+BioProject for the MOMS-PI 16S data: https://www.ncbi.nlm.nih.gov/bioproject/PRJNA326441
+
+Info about SRA metadata: https://www.ncbi.nlm.nih.gov/sra/docs/submitmeta/
+
+For more info about using rentrez, see the [Rentrez Tutorial](https://docs.ropensci.org/rentrez/articles/rentrez_tutorial.html).
+
+Info about the efetch command line tool: https://www.ncbi.nlm.nih.gov/books/NBK179288/
+
+Blog post on using `unnest_*()` with nested lists from XML data: https://urbandatapalette.com/post/2021-03-xml-dataframe-r/
+
+ENA portal API: page to generate quieries: https://www.ebi.ac.uk/ena/portal/api/#/Portal%20API/getReturnFieldsUsingGET
+
+## Fetch Biosample metadata
+
+The MOMS-PI 16S data is in [BioProject PRJNA326441](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA326441).
+We can use the rentrez package to find the associated BioSamples and fetch their associated metadata in XML format.
+We can then use the xml2 package to parse the XML data, extracting the relevant variables into a data frame.
+We will need to use the web history feature of Entrez/NCBI due to the large number of records in the project.
+
+```{r}
+acc <- "PRJNA326441"
+dir_create(here("data", "sample-data"))
+fn <- here("data", "sample-data", str_glue("{acc}-biosamples.xml"))
+if (file_exists(fn)) {
+  x <- read_xml(fn)
+} else {
+  es <- entrez_search(db = "bioproject", 
+    term = str_glue("{acc}[PRJA]"),
+    use_history = TRUE
+  )
+  es$web_history
+  lnks <- entrez_link(dbfrom = "bioproject", db = "biosample",
+    id = es[[1]],
+    cmd = "neighbor_history"
+  )
+  lnks$web_histories
+  lnks$web_histories$bioproject_biosample
+  ef <- entrez_fetch(db = "biosample", rettype = "xml", 
+    web_history = lnks$web_histories$bioproject_biosample
+  )
+  x <- read_xml(ef)
+  write_xml(x, fn)
+}
+```
+
+The XML output from `write_xml()` is nicely formatted and can be manually inspected to get a sense of the data structure and available information.
+
+Everything we need is in the Ids and Attributes sections of each BioSample entry.
+
+We can extract information from the XML structure using functions in xml2; however, I will instead convert the XML object into a nested list with `as_list()`, so that we can work with more familiar R objects.
+There is only one top-level element (the BioSampleSet), so we can discard that level and work with a list of BioSample's.
+
+```{r}
+l <- as_list(x)
+l <- l[[1]]
+```
+
+Let's take a look at the nodes within a single BioSample node:
+
+```{r}
+l[[1]] %>% names
+```
+
+We will just worry about getting information from the Ids and Attributes nodes.
+
+```{r}
+l[[1]]$Ids %>% str
+l[[1]]$Attributes %>% str
+```
+
+The Ids and Attributes node of the BioSample node are each lists of single-item lists, of which the value of the variable is the element and the name of the variable is stored within an R attribute.
+Note the distinction between the NCBI/BioSample Attributes and the R attributes.
+
+Let's demo a parsing procedure using a few BioSamples.
+
+For the variables in the Attributes node, we can use the "attribute_name" attribute as the variable name; for variables in the Ids node, we can use the first attribute (either "db" or "db_label") as a temp variable name, and then set better names later.
+
+```{r}
+l[[1]]$Attributes %>% map_chr(attr, "attribute_name") %>% unname
+l[[1]]$Attributes %>% map_chr(1) %>% unname
+```
+
+```{r}
+l[[1]]$Ids %>% map(attributes) %>% map_chr(1) %>% unname
+l[[1]]$Ids %>% map_chr(1) %>% unname
+```
+
+Since "attribute_name" is also the first attribute, we can use the same approach of taking the first attribute for the variable name in both cases.
+
+The following chunk
+
+1. Creates a data frame with a single list column containing each BioSample node
+1. Uses `tidyr::unnest_longer()` to convert this column to a list of its child nodes (like Ids and Attributes), using an `.id` field to keep these grouped by BioSample
+1. Unnests the Ids and Attributes nodes into a long list of all their individual child nodes, corresponding to the individual variable nodes we are after
+1. Extracts the names and values of each variable node
+1. Pivots into a rectagular format with one row per BioSample
+1. Renames the variables from Ids to more informative values
+
+```{r}
+```
+
+```{r}
+d <- tibble(biosample = l) %>%
+  mutate(.id = row_number()) %>%
+  unnest_longer(biosample) %>%
+  filter(biosample_id %in% c("Ids", "Attributes")) %>%
+  unnest(biosample) %>%
+  transmute(
+    .id,
+    name = biosample %>% map(attributes) %>% map_chr(1),
+    value = biosample %>% map_chr(1)
+  ) %>%
+  pivot_wider %>%
+  select(-.id) %>%
+  rename(
+    biosample_sample = BioSample, 
+    sample_name = "Sample name",
+    sra_sample = SRA,
+  )
+```
+
+Note: We could potentially instead use `case_when()`, conditioning on whether `biosample_id` equals "Ids" or "Attributes", to use different parsing functions for children of Ids and Attributes; however this might be a little tricky to use with `map()`.
+
+```{r, eval = FALSE}
+dir_create(here("output", "sample-data"))
+write_csv(d, here("output", "sample-data", str_glue("sample-data-initial.csv")))
+saveRDS(d, here("output", "sample-data", str_glue("sample-data-initial.Rds")))
+```
+
+### Inspect the metadata
+
+```{r}
+d %>% count(host_body_site)
+d %>%
+  filter(is.na(host_body_site)) %>%
+  glimpse
+```
+
+It seems like these two samples that are missing `host_body_site` are not actually 16S sequencing results (and perhaps not even from MOMSPI) and are included by mistake.
+Once we drop them, the last 9 columns are all NA and can be dropped.
+
+```{r}
+d1 <- d %>% 
+  filter(!is.na(host_body_site)) %>%
+  select(where(~!all(is.na(.))))
+```
+
+We can also drop some other useless columns,
+```{r}
+d1 %>% count(collection_date)
+d1 %>% count(env_feature)
+d1 %>% count(env_biome)
+d1 %>% count(lat_lon)
+```
+
+```{r}
+d2 <- d1 %>% select(!c(collection_date, env_feature, env_biome, lat_lon))
+```
+
+## Sequence submission data from ENA
+
+We can get the data for the SRA runs associated with the bioproject in TSV format from ENA using the ENA Portal API.
+Using https://www.ebi.ac.uk/ena/portal/api/#/Portal%20API/getReturnFieldsUsingGET, I generated an API-query url to fetch all fields in the "read_run" result type,
+
+```
+https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJNA326441&download=true&fields=all&format=TSV&result=read_run
+```
+
+```{r}
+query_url <- str_glue("https://www.ebi.ac.uk/ena/portal/api/filereport?accession={acc}&download=true&fields=all&format=TSV&result=read_run")
+fn <- here("data", "sample-data", str_glue("{acc}-runs.tsv"))
+if (!file_exists(fn)) download.file(query_url, fn)
+```
+
+```{r}
+dr <- here("data", "sample-data", str_glue("{acc}-runs.tsv")) %>%
+  read_tsv %>%
+  select(where(~!all(is.na(.))))
+dr %>% glimpse
+```
+
+Many of these variables are redundant or useless and can be dropped.
+First let's check and delete the variables with duplicated column names.
+```{r}
+dup_cols <- dr %>% select(ends_with("_1")) %>% names
+
+ok_to_delete <- function(cn) {
+  cn0 <- cn %>% str_extract(".+_1$") 
+  all.equal(pull(dr, cn0), pull(dr, cn))
+}
+
+stopifnot(
+  dup_cols %>% map_lgl(ok_to_delete) %>% all
+)
+
+dr1 <- dr %>% select(!all_of(dup_cols))
+```
+
+More identical variables:
+```{r}
+with(dr, identical(sample_description, sample_title))
+dr %>% pull(sample_description) %>% table
+
+with(dr, identical(study_accession, study_alias))
+
+with(dr, identical(accession, sample_accession))
+
+with(dr, identical(host_sex, submitted_host_sex))
+
+with(dr, identical(library_name, experiment_alias))
+
+with(dr, identical(description, experiment_title))
+```
+
+Other fields may or may not be useful to us,
+```{r}
+dr %>% pull(run_alias) %>% head
+dr %>% count(tax_id, scientific_name, environment_biome, environmental_sample, germline)
+dr %>% pull(description) %>% head
+dr %>% count(center_name)
+dr %>% count(study_title, study_alias)
+dr %>% count(sample_description) %>% pull(1)
+```
+
+```{r}
+dr2 <- dr1 %>%
+  select(
+    !c(sample_title, study_alias, run_alias, experiment_alias, experiment_title,
+      accession, study_title,
+      submitted_host_sex,
+      environment_biome, environmental_sample, germline
+    ),
+  )
+```
+
+Center name may be a useful field for determining batches.
+
+## Join with the sample metadata
+
+Check that host visit number can be converted to integer,
+```{r}
+d2 %>% count(host_visit_number) %>% pull(1)
+```
+
+Select, rename, joint, then reorder columns, and convert host visit number to integer.
+
+
+```{r}
+d3 <- d2 %>%
+  select(
+    sample_accession = biosample_sample,
+    sample_name,
+    sample_id,
+    environment_material = env_material,
+    starts_with("host")
+  )
+dr3 <- dr2 %>%
+  select(
+    study_accession:fastq_galaxy,
+    first_created:description,
+    host_tax_id
+  )
+x <- left_join(d3, dr3, by = "sample_accession") %>%
+  relocate(
+    ends_with("accession"),
+    starts_with("sample"),
+    description,
+    starts_with("host"),
+    environment_material,
+    country,
+  ) %>%
+  relocate(.after = last_col(),
+    starts_with("fastq"),
+    # where(lubridate::is.Date)
+    first_created, first_public, last_updated
+  ) %>%
+  mutate(
+    across(host_visit_number, as.integer)
+  ) %>%
+  glimpse
+```
+
+Save in compressed format.
+
+```{r}
+dir_create(here("output", "sample-data"))
+write_csv(x, here("output", "sample-data", str_glue("sample-data.csv.bz2")))
+saveRDS(x, here("output", "sample-data", str_glue("sample-data.Rds")))
+```
+
+## Session info
+
+```{r}
+sessioninfo::session_info()
+```
+
