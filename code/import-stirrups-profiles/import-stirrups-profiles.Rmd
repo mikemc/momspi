@@ -1,0 +1,424 @@
+---
+title: "Prepare STIRRUPS-profile data"
+author:
+  - name: Michael R. McLaren
+date: 2021-07-23
+output: html_document
+---
+
+STIRRUPS taxonomic profiles and associated metadata for vaginal samples were previously downloaded from the HMP DAC.
+This document loads and inspects this data, and prepares an abundance matrix and associated sample metadata and taxonomy table for downstream analysis.
+
+```{r}
+library(tidyverse)
+library(here)
+library(fs)
+```
+
+## Abundance matrix
+
+The STIRRUPS profiles are in "data/stirrups-profiles",
+
+```{r}
+fns <- here("data/stirrups-profiles") %>%
+  dir_ls(glob = "*stirrups.profile.txt")
+length(fns)
+fns[1] %>% path_file
+```
+
+These are TSV files.
+Manual inspection of the first profile (file EP003595_K10_MV1D.stirrups.profile.txt) gives some indication of the variables (columns); Lines 1 and 40 are reproduced below.
+
+```
+L1 : EP003595_K10_MV1D	Lactobacillus_crispatus_cluster	AT	45958	99.0004739132308	99.6258910309223
+L40: EP003595_K10_MV1D	"Lachnospiraceae"_BVAB1	AT	1	0.00215415104907156	98.8
+```
+
+The quotes in some OTU names (e.g. in L40) need to be handled carefully when reading in the files.
+
+The [STIRRUPS Readme](https://sourceforge.net/projects/stirrups/files/) describes the variables (columns),
+
+> Summary File:
+>
+> The summary file describes the population of the various clusters. 
+> It gives the name of the sample, the name of the taxa, the number of reads in the taxa, the percentage of reads from the sample that mapped to that taxa, and the average identity score for the taxa. 
+
+This text describes all columns except for the additional third column whose values are "AT" or "BT".
+Although not documented, these appear to be abbreviations for "Above threshold" and "Below threshold" and denote whether the percent identity of the mapped reads was above a cutoff, which here seems to have been 97% (see below).
+
+Let's read in one file to test our ability to parse.
+Note the blanking of the `quote` argument to `read_tsv()` to avoid issues related to the appearance of quotes in the OTU names.
+
+```{r}
+cns <- c(
+  'sample_name', 'species_cluster', 'threshold', 'reads', 'percent',
+  'average_percent_identity'
+)
+x <- fns[1] %>% read_tsv(col_names = cns, col_types = 'cccddd', quote = "")
+stopifnot(all.equal(x$percent, x$reads %>% {. / sum(.) * 100}))
+```
+
+Now let's read in all files into a single data frame.
+
+```{r}
+x <- fns %>%
+  map_dfr(read_tsv, col_names = cns, col_types = 'cccddd', quote = "")
+```
+
+Comparing the identity ranges for the above- and below- threshold reads,
+
+```{r}
+x %>%
+  with_groups(threshold, summarize, 
+    across(average_percent_identity, .fns = c(min = min, max = max, n = length),
+      .names = "{fn}")
+  )
+```
+
+confirms that 97% identity was used as the threshold.
+For our analysis, we will use only only the above-threshold reads.
+
+Next, let's prepare an abundance matrix for downstream use, using just the above-threshold reads, putting OTUs as columns, and sorting samples and OTUs lexicographically.
+The lexicographic sorting will put the OTUs with quoted first parts first in the matrix.
+
+```{r}
+mat <- x %>%
+  filter(threshold == "AT") %>%
+  select(sample_name, species_cluster, reads) %>%
+  pivot_wider(names_from = species_cluster, 
+    values_from = reads, values_fill = 0,
+    names_sort = TRUE
+  ) %>%
+  arrange(sample_name) %>% # should be redundant
+  column_to_rownames(var = "sample_name") %>%
+  as("matrix")
+
+mat[1:2, 1:2]
+
+colSums(mat) %>% summary
+mean(mat > 0)
+mean(mat == 0)
+
+rm(x)
+```
+
+## Sample data
+
+Sample (meta)data is available through the metadata associated with the file manifest from the HMP DAC, as well as in the table I previously parsed from the BioSample and ENA metadata.
+Let's first load and inspect the manifest metadata.
+
+```{r}
+fns <- here("data/stirrups-profiles") %>% dir_ls(glob = "*manifest*")
+fns %>% path_file
+
+l <- fns %>% 
+  map(read_tsv)
+
+stopifnot(identical(
+    l[[1]] %>% pull(sample_id),
+    l[[2]] %>% pull(sample_id)
+))
+```
+
+The first file is information about the files; the second is information about the samples.
+The rows correspond to each other but can also be matched using the `sample_id` field.
+
+```{r}
+hmpsam <- left_join(l[[1]], l[[2]], by = "sample_id")
+hmpsam %>% glimpse
+```
+
+To match these rows with the rows in the abundance matrix, we can extract the sample name from the file name at the end of the URLs,
+
+```{r}
+hmpsam1 <- hmpsam %>%
+  mutate(
+    file = path_file(urls),
+    sample_name = str_extract(file, "^[^\\.]+")
+  ) %>%
+  relocate(sample_name) %>%
+  relocate(starts_with("file"), md5, size, urls, .after = last_col()) %>%
+  glimpse
+
+hmpsam1 %>% select(file, sample_name) %>% head(2)
+```
+
+Check that these names match the matrix
+
+```{r}
+stopifnot(setequal(hmpsam1$sample_name, rownames(mat)))
+```
+
+Now let's pull in the SRA/BioSample metadata
+
+```{r}
+biosam <- here("output/sample-data", "sample-data.csv.bz2") %>% read_csv %>% 
+  glimpse
+biosam %>% count(host_body_product, host_body_site)
+biosam %>% filter(host_body_product == "vaginal") %>% count(center_name)
+biosam %>% filter(host_body_product == "vaginal") %>% count(instrument_model)
+```
+
+We don't gain much of interest from this larger set of metadata for the analyses we will be doing, other than perhaps "center_name".
+
+Let's use a paired-down version of the BioSample metadata, after checking that the two tables are consistent.
+
+```{r}
+setdiff(hmpsam1$sample_name, biosam$sample_name)
+biosam %>% 
+  filter(host_body_product == "vaginal") %>%
+  pull(sample_name) %>%
+  setdiff(hmpsam1$sample_name)
+tmp <- left_join(hmpsam1, biosam, by = "sample_name")
+all.equal(tmp$host_visit_number, tmp$visit_number)
+all.equal(tmp$host_subject_id, tmp$host_subject_id)
+```
+
+(There are a couple vaginal samples that are missing from the HMP data)
+
+```{r}
+sam <- biosam %>%
+  filter(sample_name %in% hmpsam1$sample_name) %>%
+  select(sample_name, starts_with("host"), center_name, -host_tax_id) %>%
+  arrange(sample_name)
+stopifnot(identical(sam$sample_name, rownames(mat)))
+```
+
+## Taxonomy
+
+```{r}
+colnames(mat) %>% head
+colnames(mat) %>% tail
+```
+
+We can parse the genus from the OTU name for the OTU names without quotes.
+
+```{r}
+otu_genus <- tibble(otu = colnames(mat)) %>%
+  mutate(
+    genus = str_extract(otu, "^[^_]+"),
+    genus = ifelse(str_detect(genus, "^\""), NA, genus)
+  ) %>%
+  print
+```
+
+I'm not sure what database files were used; however, we can download the (perhaps outdated) taxonomy table from the Sourceforge page,
+
+```{r}
+base_url <- "https://sourceforge.net/projects/stirrups/files"
+fns <- c("taxidfile.txt", "taxon_hierarchy.txt")
+urls <- file.path(base_url, fns) # path() will mangle the url
+dests <- here("data/stirrups-database", fns)
+if (!file_exists(dests[1])) {
+  walk2(urls, dests, download.file, method = "wget")
+}
+dests[2] %>% read_lines(n_max = 2)
+
+x <- dests[2] %>% 
+  read_tsv(col_names = FALSE) %>% 
+  select(!where(~all(is.na(.))))
+```
+
+Looks like the format is alternating columns of value, name.
+Let's parse a standard taxonomy table from this.
+
+```{r}
+cns <- str_c(sep = "_",
+  rep(c("value", "rank"), times = 10),
+  rep(1:10, each = 2)
+)
+x1 <- x %>% set_names(cns) %>% mutate(idx = row_number())
+x2 <- x1 %>% 
+  pivot_longer(
+    -idx,
+    names_to = c(".value", "rank_idx"),
+    names_sep = "_"
+  )
+```
+
+Note, there are duplicates for a few taxa in rank "suborder".
+
+```{r}
+dups <- x2 %>%
+  add_count(idx, rank) %>%
+  filter(n > 1) %>%
+  print
+dups %>% count(rank)
+x2 %>% filter(idx == 128)
+```
+
+We can fix by just subsetting to the ranks we are actually interested in before pivoting wide.
+
+```{r}
+rnks <- c("genus", "family", "order", "class", "phylum", "domain") %>% rev
+x3 <- x2 %>%
+  mutate(value = ifelse(value == "0", NA_character_, value)) %>%
+  filter(rank %in% rnks) %>%
+  select(-rank_idx) %>%
+  pivot_wider(names_from = rank, values_from = value) %>%
+  select(all_of(rnks))
+```
+
+How many of our OTUs' genera appear in this table?
+
+```{r}
+genera <- otu_genus %>% filter(!is.na(genus)) %>% pull(genus)
+table(genera %in% x3$genus)
+```
+
+Most, but not all, suggesting that this is not the actual reference set that was used for these STIRRUPS profiles.
+
+Let's join by genus with our OTUs into a tax table,
+
+```{r}
+tax <- otu_genus %>%
+  left_join(x3, by = "genus") %>%
+  relocate(genus, .after = last_col())
+```
+
+## Reference sequences
+
+We can similarly download the database in the SourceForge project (https://sourceforge.net/projects/stirrups/files/), but this may not be the database that was actually used.
+
+```{r}
+ref_url <- "https://sourceforge.net/projects/stirrups/files/vaginal_16S_V1V3_refdb1-1.fa"
+ref_file <- path_file(ref_url)
+ref_dest <- here("data/stirrups-database", ref_file)
+ref_dest %>% path_dir %>% dir_create
+if (!file_exists(ref_dest)) {
+  download.file(ref_url, ref_dest, method = "wget")
+}
+```
+
+```{r}
+refs <- Biostrings::readDNAStringSet(ref_dest)
+```
+
+```{r}
+nms <- refs %>% names
+nms %>% head(2)
+```
+
+Next, we need to build the names of the species clusters in the STIRRUPS output from these names.
+Perhaps the STIRRUPS names come from joining the genus and species fields in the sequence names.
+
+```{r}
+colnames(mat) %>% str_subset("Acetomaculum")
+colnames(mat) %>% str_subset("Actinomyces")
+```
+
+What about the OTUs whose names have quoted family names?
+
+```{r}
+nms %>% str_subset("Clostridiaceae")
+nms %>% str_subset("Lachnospiraceae")
+nms %>% str_subset("Porphyromonadaceae")
+```
+
+From this quick look, it seems like the cases where the species name in the STIRRUPS output is of the form "OTU#" are not in the database, and perhaps are de novo OTUs, and the other cases are in the database.
+
+Let's drop this for now.
+
+## Explore data
+
+For this part, I will first load the data into a phyloseq object
+
+```{r}
+library(speedyseq)
+
+ps <- phyloseq(
+  otu_table(mat, FALSE), 
+  sample_data(sam),
+  tax_table(tax)
+)
+stopifnot(setequal(rownames(mat), sample_names(ps))) 
+# stopifnot(setequal(colnames(mat), taxa_names(ps))) 
+setdiff(colnames(mat), taxa_names(ps))
+setdiff(taxa_names(ps), colnames(mat))
+```
+
+Note, phyloseq apparently doesn't allow quotes in the taxa names and has automatically removed them.
+
+Next we will look for the presence of OTUs corresponding to the 7 species from @brooks2015thet.
+
+```{r}
+taxa_names(ps) %>% str_subset("Lactobacillus_crispatus")
+taxa_names(ps) %>% str_subset("Lactobacillus_iners")
+taxa_names(ps) %>% str_subset("Gardnerella")
+taxa_names(ps) %>% str_subset("Atopobium")
+taxa_names(ps) %>% str_subset("Streptococcus")
+taxa_names(ps) %>% str_subset("Sneathia")
+taxa_names(ps) %>% str_subset("Prevotella")
+```
+
+Except for Lactobacillus crispatus, there is exactly one OTU corresponding to the @brooks2015thet species.
+Let's check the abundances of the two L. crispatus OTUs; perhaps the "type1" OTU is not very common?
+
+```{r}
+ps %>% 
+  transform_sample_counts(~ . / sum(.)) %>%
+  filter_tax_table(
+    genus == "Lactobacillus", 
+    str_detect(.otu, "crispatus")
+  ) %>%
+  as_tibble %>%
+  with_groups(.otu, summarize, across(.abundance, max))
+```
+
+L. crispatus type1 at most a tiny fraction in every sample, so we can ignore it and just treat "Lactobacillus_crispatus_cluster" as the focal OTU.
+
+
+```{r}
+control_taxa <- c(
+  "Gardnerella_vaginalis",
+  "Atopobium_vaginae",
+  "Lactobacillus_crispatus_cluster",
+  "Lactobacillus_iners",
+  "Prevotella_bivia",
+  "Streptococcus_agalactiae",
+  "Sneathia_amnii"
+)
+```
+
+```{r, fig.dim = c(7, 7)}
+ps %>% 
+  transform_sample_counts(~ . / sum(.)) %>%
+  filter_tax_table(.otu %in% control_taxa) %>%
+  as_tibble %>%
+  ggplot(aes(y = .otu, x = .abundance + 1e-3)) +
+  scale_x_log10() +
+  ggdist::stat_halfeye()
+```
+
+
+## Save tables
+
+```{r}
+dr <- here("output", "stirrups-profiles")
+dir_create(dr)
+```
+
+Before saving, let's add a field to the tax table to denote the control taxa from @brooks2015thet.
+
+```{r}
+tax1 <- tax %>%
+  mutate(control = otu %in% control_taxa)
+tax1 %>% count(control)
+```
+
+Save the abundance matrix, sample data, and tax table as compressed CSV files,
+
+```{r}
+mat %>%
+  as_tibble(rownames = "sample_name") %>%
+  write_csv(path(dr, str_glue("abundance-matrix.csv.bz2")))
+write_csv(sam, path(dr, str_glue("sample-data.csv.bz2")))
+write_csv(tax1, path(dr, str_glue("taxonomy.csv.bz2")))
+```
+
+## Session info
+
+```{r}
+sessioninfo::session_info()
+```
+
