@@ -1,0 +1,30 @@
+unnamed-chunk-1	.Random.seed
+unnamed-chunk-2	otu	ps	sam	tax
+unnamed-chunk-3	mc_fit
+unnamed-chunk-4	control_species
+unnamed-chunk-5	bias_all	bias_all_vec	bias_genus	bias_species
+unnamed-chunk-6	ps.cal	ps.obs
+unnamed-chunk-7	mean_eff
+unnamed-chunk-8	
+unnamed-chunk-9	x
+unnamed-chunk-10	
+unnamed-chunk-11	
+unnamed-chunk-12	
+unnamed-chunk-13	
+unnamed-chunk-14	
+unnamed-chunk-15	x1
+unnamed-chunk-16	p1
+unnamed-chunk-17	p2
+unnamed-chunk-18	find_sign_change	get_taxa_fold_change	test
+unnamed-chunk-19	x2
+unnamed-chunk-20	p1	p2
+unnamed-chunk-21	p1
+unnamed-chunk-22	p2
+unnamed-chunk-23	rng
+unnamed-chunk-24	EP154266_prune	EP154266_prune_sign_change	EP154266_tble
+unnamed-chunk-25	
+unnamed-chunk-26	
+unnamed-chunk-27	
+unnamed-chunk-28	ep229	m1
+unnamed-chunk-29	ep972	m2	x
+unnamed-chunk-30	ep972_all	x1
