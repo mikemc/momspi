@@ -385,7 +385,7 @@ get_taxa_fold_change <- function(cal, obs, subject, prune=F, cntrl_spec=control_
     ret_list_obs[[i]] <- filter(temp$Observed, .otu==i) %>% arrange(host_visit_number)
     
   }
-  #okay for each of these taxa we now need to obsculate the fold change in abundance between row i and row i + 1
+  #okay for each of these taxa we now need to calculate the fold change in abundance between row i and row i + 1
   for(i in taxa_names){
     for(j in 1:nrow(ret_list_obs[[i]])){
       #initalize the column as -1 (fold change value should never be negative)
@@ -599,7 +599,12 @@ for(i in Subject_names){
 
 pruned_sign_dif
 
-all_together <- do.call(rbind, pruned_sign_dif)
+all_together_pruned_difs <- do.call(rbind, pruned_sign_dif)
+saveRDS(all_together_pruned_difs, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_dif_pruned.RDS")
+
+all_together_pruned_fc_changes <- do.call(rbind, pruned_fc_changes)
+saveRDS(all_together_pruned_fc_changes, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_pruned.RDS")
+
 which.max(all_together$FC_Diff)
 View(all_together[960:970,])
 
@@ -627,7 +632,12 @@ for(i in Subject_names){
 
 nonpruned_sign_dif
 
-all_together <- do.call(rbind, nonpruned_sign_dif)
+all_together_nonprune_dif <- do.call(rbind, nonpruned_sign_dif)
+saveRDS(all_together_nonprune_dif, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_dif_nonprune.RDS")
+
+all_together_nonprune_all <- do.call(rbind, nonpruned_fc_changes)
+saveRDS(all_together_nonprune_all, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_nonprune.RDS")
+
 
 ### To make this simplier lets only look at control species
 
