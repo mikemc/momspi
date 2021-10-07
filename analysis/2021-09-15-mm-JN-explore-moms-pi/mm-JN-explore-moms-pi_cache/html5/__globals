@@ -23,8 +23,10 @@ unnamed-chunk-22	==	%>%	aes	c	filter	geom_line	ggplot	host_subject_id	host_visit
 unnamed-chunk-23	>	.	$	%>%	gm_range	p1
 unnamed-chunk-24	c	control_species	find_sign_change	get_taxa_fold_change	kable	ps.cal	ps.obs	T
 unnamed-chunk-25	~	==	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	scale_y_log10	type	x1
-unnamed-chunk-26	==	!	[[	[[<-	$	control_species	do.call	find_sign_change	for	get_taxa_fold_change	list	message	names	ps.cal	ps.obs	rbind	sample_data	T	table	unique	View	which	which.max
-unnamed-chunk-27	==	[[	[[<-	$	c	control_species	do.call	F	find_sign_change	for	get_taxa_fold_change	list	message	p1	p2	plot_layout	ps.cal	ps.obs	rbind	Subject_names	T	View	which	which.max
+unnamed-chunk-26	==	!	[[	[[<-	$	all_together	control_species	do.call	find_sign_change	for	get_taxa_fold_change	list	message	names	ps.cal	ps.obs	rbind	sample_data	saveRDS	T	table	unique	View	which	which.max
+unnamed-chunk-27	==	[[	[[<-	$	all_together	c	control_species	do.call	F	find_sign_change	for	get_taxa_fold_change	list	message	p1	p2	plot_layout	ps.cal	ps.obs	rbind	saveRDS	Subject_names	T	View	which	which.max
 unnamed-chunk-28	~	==	%>%	.abundance	aes	c	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	mean_eff	mean_efficiency	plot_layout	scale_y_log10	type	x1
 unnamed-chunk-29	~	==	%>%	abbreviate	.abundance	aes	as_tibble	c	close_elts	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	list	map	map_dfr	mean_eff	mean_efficiency	mutate	.otu	plot_layout	ps.cal	ps.obs	scale_y_log10	str_replace	transform_sample_counts	type
 unnamed-chunk-30	~	==	%>%	abbreviate	.abundance	aes	as_tibble	c	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	list	m2	map	map_dfr	mutate	.otu	plot_layout	ps.cal	ps.obs	scale_y_log10	str_replace	type
+unnamed-chunk-31	dim	list
+unnamed-chunk-32	==	!	$	%>%	dim	filter	get_rows	host_subject_id	lapply	length	names	nrow	ps.cal	readRDS	sample_data	sort	split	table	type	unique	unlist	which	x

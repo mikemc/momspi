@@ -602,8 +602,7 @@ pruned_sign_dif
 all_together_pruned_difs <- do.call(rbind, pruned_sign_dif)
 saveRDS(all_together_pruned_difs, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_dif_pruned.RDS")
 
-all_together_pruned_fc_changes <- do.call(rbind, pruned_fc_changes)
-saveRDS(all_together_pruned_fc_changes, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_pruned.RDS")
+saveRDS(pruned_fc_changes, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_pruned.RDS")
 
 which.max(all_together$FC_Diff)
 View(all_together[960:970,])
@@ -635,8 +634,8 @@ nonpruned_sign_dif
 all_together_nonprune_dif <- do.call(rbind, nonpruned_sign_dif)
 saveRDS(all_together_nonprune_dif, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_dif_nonprune.RDS")
 
-all_together_nonprune_all <- do.call(rbind, nonpruned_fc_changes)
-saveRDS(all_together_nonprune_all, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_nonprune.RDS")
+
+saveRDS(nonpruned_fc_changes, "~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_nonprune.RDS")
 
 
 ### To make this simplier lets only look at control species
@@ -727,3 +726,51 @@ In both cases we see a sign change that results in a fairly significant differen
 
 
 Overall these results point toward that if the sample abundances switch in domination from a taxa with high bias to low bias (or vice versa) we can arrive at sign change errors between sampling time points. I think these examples would be a great point to include in the paper! I can clean up the code and we can figure out how we want to present these results.
+
+## Summary statistics for FC changes
+
+### Helper functions
+
+```{r}
+get_rows <- function(x) {
+    list(dim = dim(x)[1])
+}
+```
+Pruned
+```{r}
+all_pruned_data <- readRDS("~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_all_pruned.RDS")
+# we need to bind all the patinet data into a single df.
+# structure of above data is
+#             Patient
+#        Cali               observed
+# Taxa ab. per vis.       Taxa ab. per vis.
+
+### lets calculate per taxa how many times we see an FC difference...
+
+FC_dif_pruned_data <- readRDS("~/GitHub_Repos/MOMSPI/momspi/data/FC_data/FC_changes_dif_pruned.RDS")
+dim(FC_dif_pruned_data)[1]/2
+#499 vists per taxa that there is a fold change between the observed and calibrated
+
+#lets split this df into seperate
+
+FC_dif_pruned_split <- split(FC_dif_pruned_data, FC_dif_pruned_data$.otu)
+
+total_fc_per_taxa <- lapply(FC_dif_pruned_split, get_rows)
+total_samples_per_taxa <- sort(unlist(total_fc_per_taxa))
+
+#lets caluclate the % of times this occured for each taxon.
+Subject_names <- unique(sample_data(ps.cal)$host_subject_id)
+#remove subjects with only 1 samples
+one_sample_subjects <- names(which(table(sample_data(ps.cal)$host_subject_id) ==1 ))
+Subject_names <- Subject_names[! Subject_names %in% one_sample_subjects]
+
+x_filt <- x %>% filter(type=="Calibrated") %>% filter(host_subject_id %in% Subject_names)
+length(unique(x_filt$host_subject_id))
+
+nrow(x_filt) - length(unique(x_filt$host_subject_id))
+
+total_samples_per_taxa/(nrow(x_filt) - length(unique(x_filt$host_subject_id)))*100
+
+#looks like it occurs anywhere between 0.06% to 1.7 % of samples
+#note that this quick caluclation does not remove the cases where the abundance of the taxon is 0 in the before and after sample (therefore not possible to have FC dif)
+```

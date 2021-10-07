@@ -28,3 +28,5 @@ unnamed-chunk-27
 unnamed-chunk-28	ep229	m1
 unnamed-chunk-29	ep972	m2	x
 unnamed-chunk-30	ep972_all	x1
+unnamed-chunk-31	get_rows
+unnamed-chunk-32	all_pruned_data	FC_dif_pruned_data	FC_dif_pruned_split	one_sample_subjects	Subject_names	total_fc_per_taxa	total_samples_per_taxa	x_filt
