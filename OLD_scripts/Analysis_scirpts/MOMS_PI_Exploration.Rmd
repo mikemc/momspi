@@ -1,0 +1,211 @@
+---
+title: "MOMS_PI_Calibration"
+author: "Jacob T. Nearing"
+date: "8/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(phyloseq)
+library(tidyverse)
+library(ggbeeswarm)
+library(cowplot)
+
+library(metacal)
+library(reshape2)
+
+theme_set(theme_cowplot())
+```
+
+
+# Estimate Bias from Mock communities
+```{r}
+
+dr <- system.file("extdata", package = "metacal")
+list.files(dr)
+#> [1] "brooks2015-actual.csv"      "brooks2015-observed.csv"   
+#> [3] "brooks2015-sample-data.csv"
+actual <- file.path(dr, "brooks2015-actual.csv") %>%
+  read.csv(row.names = "Sample") %>%
+  as("matrix")
+
+observed <- file.path(dr, "brooks2015-observed.csv") %>%
+  read.csv(row.names = "Sample") %>%
+  subset(select = - Other) %>%
+  as("matrix")
+
+sam <- file.path(dr, "brooks2015-sample-data.csv") %>% read.csv()
+
+# Estimate bias with bootstrapping for error estimation
+mc_fit <- estimate_bias(observed, actual, margin = 1, boot = TRUE)
+summary(mc_fit)
+
+#Load in MOMS_PI data
+MOMS_PI_table <- read.csv("~/projects/MOMSPI/STIRRUPs_Profiles/abundance-matrix.csv", check.names = F, row.names=1)
+
+#two crispatus so we need to combined them
+grep("crispatus", colnames(MOMS_PI_table))
+crisp_reads <- MOMS_PI_table[,205] + MOMS_PI_table[,206]
+MOMS_PI_table <- MOMS_PI_table[,-c(205,206)]
+MOMS_PI_table$Lactobacillus_crispatus <- crisp_reads
+
+MOMS_meta <- read.csv("~/projects/MOMSPI/sample-data.csv")
+rownames(MOMS_meta) <- MOMS_meta$sample_name
+
+MOMS_meta <- MOMS_meta[rownames(MOMS_PI_table),]
+
+```
+
+
+Looks just like what is reported in the 2019 eLife paper.
+
+# Functions for MOMS_PI_exploration
+```{r}
+Visit_Fold_changes <- function(x){
+  
+  changes_compute <- ncol(x) - 1
+  
+  FC_change <- matrix(-1,nrow=nrow(x), ncol=changes_compute)
+  
+  ## this is a really bad way of doing it but will do for now..
+  #go through rows
+  for(i in 1:nrow(x)){
+    #go through first col
+    for(j in 1:(ncol(x) - 1)){
+      #go through cols
+      
+      FC_val <- x[i,j+1]/x[i,j]
+      FC_change[i,j] <- FC_val
+            
+
+    }
+  }
+  rownames(FC_change) <- rownames(x)
+  return(FC_change)
+}
+
+## function takes in a sample name and produces both a stacked barchart of observed vs calibrated and line plots showing the changes over time of each
+get_calibrated_plots <- function(observed_vals, bias_estimate, non_esti_action="remove", meta){
+  
+  
+  estimate_taxa <- names(bias_estimate$estimate)
+  coef_bias <- coef(bias_estimate)
+  
+  
+  if(non_esti_action=="remove"){
+    
+    #remove taxa that are not estiamted
+    subset_ob <- observed_vals[,which(colnames(observed_vals) %in% estimate_taxa)]  
+    
+    subset_ob_RA <- sweep(subset_ob, 1, rowSums(subset_ob), "/")
+    
+    cali_tab <- calibrate(subset_ob_RA, coef_bias, margin=1)
+    
+    melt_subset_ob <- reshape2::melt(subset_ob_RA)
+    melted_cali_tab <- reshape2::melt(cali_tab)
+    
+    melt_subset_ob$Type <- "Observed"
+    melted_cali_tab$Type <- "Calibrated"
+    
+    long_data <- rbind(melt_subset_ob, melted_cali_tab)
+    
+    long_data$Visit <- meta$host_visit_number[match(long_data$Var1, meta$sample_name)]
+    long_data$Visit <- factor(long_data$Visit, levels=c(1:1000))
+  }
+  
+  plot1 <- ggplot(long_data, aes(x=Visit, y=value, fill=Var2)) + geom_bar(stat="identity") + 
+    facet_grid(~ Type) + 
+    theme(axis.text.x = element_text(angle=75, vjust = 0.55)) + scale_fill_discrete(name="Taxa")
+
+  plot2 <- ggplot(long_data, aes(x=Visit, y=value, color=Type, group=Type)) + geom_line() + facet_grid(rows=vars(Var2)) + 
+  theme_bw() + ylab("Relative Abundance")
+  
+  
+  ## calculate log_fold_change for each taxa
+  
+  Observed_temp <- long_data[which(long_data$Type=="Observed"),]
+  Observed_agg <- dcast(Observed_temp, formula = Var2 ~ Var1 + Visit)
+  rownames(Observed_agg) <- Observed_agg[,1]
+  Observed_agg <- Observed_agg[,-1]
+  Observed_FC <- Visit_Fold_changes(Observed_agg)
+  
+  
+  Calibrated_temp <- long_data[which(long_data$Type=="Calibrated"),]
+  Calibrated_agg <- dcast(Calibrated_temp, formula = Var2 ~ Var1 + Visit)
+  rownames(Calibrated_agg) <- Calibrated_agg[,1]
+  Calibrated_agg <- Calibrated_agg[,-1]
+  Calibrated_FC <- Visit_Fold_changes(Calibrated_agg)
+  
+  return(list(plot1,plot2,Observed_FC, Calibrated_FC))
+
+  
+}
+
+```
+
+
+Two functions 
+First one is simply to caluclate the fold change of taxa between subsequent visits
+The second takes in a matrix that is a subset of the MOMS PI taxa abundance table that only contains a single patient/host of interest.
+It produces a stacked barchart comparing observed vs calibrated
+Line plots showing the differene in taxon relative abundance changes over time for calibarated vs observed
+Then two dataframe that contain the fold changes for the calibrate and observed.
+
+# Data Exploration
+```{r}
+
+melted_MOMS_PI_table <- reshape2::melt(as.matrix(MOMS_PI_table))
+melted_MOMS_PI_table$host_id <- MOMS_meta$host_subject_id[match(melted_MOMS_PI_table$Var1, MOMS_meta$sample_name)]
+
+#calculate Cov of each taxa for each patient
+CoV_of_Taxa <- aggregate(melted_MOMS_PI_table$value, by=list(melted_MOMS_PI_table$host_id, melted_MOMS_PI_table$Var2),
+                        FUN=function(x) sd(x)/mean(x))
+```
+
+## Examine subject with the most samples
+
+Subject EP154266
+```{r}
+which.max(table(MOMS_meta$host_subject_id))
+
+EP154266_data <- MOMS_PI_table[which(MOMS_meta$host_subject_id=="EP154266"),]
+
+EP154266_plot <- get_calibrated_plots(as.matrix(EP154266_data), mc_fit, meta=MOMS_meta)
+EP154266_plot
+
+```
+
+Looks like the calibrated values tell a different store when you look at which taxa dominate the sample in relative abundance.
+Also looks like in some cases the fold change from one sample to the next is significantly different in the two different abundance values.
+For example Lactobacillus iners looks to increaseby 570X when examining calibrations but only 54X when examing observed values. 
+
+
+## Examine subject with highest CoV for Gardnerella
+```{r}
+Cov_of_taxa_gar <- CoV_of_Taxa[grep("Gard", CoV_of_Taxa$Group.2),]
+which.max(Cov_of_taxa_gar$x)
+Cov_of_taxa_gar[138,]
+
+EP247202_taxa <- MOMS_PI_table[which(MOMS_meta$host_subject_id=="EP247202"),]
+dim(EP247202_taxa)
+
+EP24702_plots <- get_calibrated_plots(as.matrix(EP247202_taxa), mc_fit, meta=MOMS_meta)
+EP24702_plots
+```
+
+Story from stacked barcharts doesn't change all that significantly...
+Most fold changes are the same expcept for Lacto iners... (with a similar story as above)
+
+## Examine subject with highest CoV for Lacto. iners
+```{r}
+Cov_of_taxa_iner <- CoV_of_Taxa[grep("iners", CoV_of_Taxa$Group.2),]
+which.max(Cov_of_taxa_iner$x)
+Cov_of_taxa_iner[258,]
+
+EP422409_taxa <- MOMS_PI_table[which(MOMS_meta$host_subject_id=="EP422409"),]
+EP422409_plot <- get_calibrated_plots(as.matrix(EP422409_taxa), mc_fit, meta=MOMS_meta)
+EP422409_plot
+```
+Interesting the samples are almost all dominated by crispatus which doesn't change with observed or calibrated values. We some significant changes in fold change values but nothing as extreme as above.

@@ -1,0 +1,32 @@
+unnamed-chunk-1	library	setwd	theme_cowplot	theme_set
+unnamed-chunk-2	~	%>%	across	case_when	col_character	col_double	cols	factor	here	host_visit_number	mutate	mutate_tax_table	otu_table	phyloseq	read_csv	sample_data	str_replace	str_subset	taxa_names	taxa_names<-	tax_table
+unnamed-chunk-3	%>%	as	estimate_bias	file.path	list.files	Other	read.csv	rm	subset	summary	system.file
+unnamed-chunk-4	%>%	all	coef	mc_fit	names	ps	stopifnot	taxa_names
+unnamed-chunk-5	~	%>%	across	as_tibble	case_when	coef	deframe	efficiency	efficiency.x	efficiency.y	enframe	genus	glimpse	gm_mean	left_join	mc_fit	mutate	.otu	print	ps	select	species	str_extract	summarize	tax_table	with_groups
+unnamed-chunk-6	%>%	bias_all_vec	calibrate	close_elts	ps	transform_sample_counts
+unnamed-chunk-7	%>%	as_tibble	bias_all_vec	enframe	left_join	perturb	ps.cal	sam	sample_sums
+unnamed-chunk-8	$	%>%	all.equal	apply	as	bias_all_vec	colnames	identical	mean_eff	names	orient_taxa	otu_table	ps.cal	rm	stopifnot	sum	unname
+unnamed-chunk-9	~	%>%	abbreviate	as_tibble	close_elts	list	map	map_dfr	mutate	.otu	ps.cal	ps.obs	str_replace	transform_sample_counts
+unnamed-chunk-10	~	==	%>%	.abundance	aes	facet_wrap	filter	geom_col	ggplot	host_subject_id	host_visit_number	.otu	x
+unnamed-chunk-11	~	==	%>%	.abundance	aes	facet_wrap	filter	geom_line	ggplot	host_subject_id	host_visit_number	.otu	x
+unnamed-chunk-12	~	==	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	type	x
+unnamed-chunk-13	~	==	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	scale_y_log10	type	x
+unnamed-chunk-14	~	==	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	scale_y_log10	type	x
+unnamed-chunk-15	~	==	%>%	abbreviate	.abundance	aes	as_tibble	facet_wrap	filter	geom_col	ggplot	host_subject_id	host_visit_number	list	map	map_dfr	mutate	.otu	ps.cal	ps.obs	str_replace
+unnamed-chunk-16	~	==	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	scale_y_log10	type	x1
+unnamed-chunk-17	==	%>%	aes	c	filter	geom_line	ggplot	host_subject_id	host_visit_number	mean_eff	mean_efficiency	p1	plot_layout	scale_y_log10
+unnamed-chunk-18	~	<	==	>	|	!=	[<-	[[	[[<-	$	$<-	%>%	arrange	as_tibble	c	close_elts	control_species	F	filter	filter_sample_data	for	host_subject_id	host_visit_number	if	is.na	list	map	message	names	next	nrow	.otu	ps.cal	ps.obs	rbind	return	T	transform_sample_counts	unique	which.max
+unnamed-chunk-19	==	%>%	abbreviate	.abundance	as_tibble	filter_sample_data	host_subject_id	list	map	map_dfr	mean	median	mutate	.otu	ps.cal	ps.obs	str_replace	with_groups
+unnamed-chunk-20	%>%	aes	distinct	geom_histogram	ggplot	mean	median	.otu	scale_x_log10	select	x2
+unnamed-chunk-21	~	>	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_visit_number	median	scale_y_log10	theme	type	x2
+unnamed-chunk-22	==	%>%	aes	c	filter	geom_line	ggplot	host_subject_id	host_visit_number	mean_eff	mean_efficiency	p1	plot_layout	scale_y_log10
+unnamed-chunk-23	>	.	$	%>%	gm_range	p1
+unnamed-chunk-24	c	control_species	find_sign_change	get_taxa_fold_change	kable	ps.cal	ps.obs	T
+unnamed-chunk-25	~	==	%>%	.abundance	aes	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	scale_y_log10	type	x1
+unnamed-chunk-26	==	!	[[	[[<-	$	all_together	control_species	do.call	find_sign_change	for	get_taxa_fold_change	list	message	names	ps.cal	ps.obs	rbind	sample_data	saveRDS	T	table	unique	View	which	which.max
+unnamed-chunk-27	==	[[	[[<-	$	all_together	c	control_species	do.call	F	find_sign_change	for	get_taxa_fold_change	list	message	p1	p2	plot_layout	ps.cal	ps.obs	rbind	saveRDS	Subject_names	T	View	which	which.max
+unnamed-chunk-28	~	==	%>%	.abundance	aes	c	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	mean_eff	mean_efficiency	plot_layout	scale_y_log10	type	x1
+unnamed-chunk-29	~	==	%>%	abbreviate	.abundance	aes	as_tibble	c	close_elts	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	list	map	map_dfr	mean_eff	mean_efficiency	mutate	.otu	plot_layout	ps.cal	ps.obs	scale_y_log10	str_replace	transform_sample_counts	type
+unnamed-chunk-30	~	==	%>%	abbreviate	.abundance	aes	as_tibble	c	facet_grid	filter	geom_line	ggplot	host_subject_id	host_visit_number	list	m2	map	map_dfr	mutate	.otu	plot_layout	ps.cal	ps.obs	scale_y_log10	str_replace	type
+unnamed-chunk-31	dim	list
+unnamed-chunk-32	==	!	$	%>%	dim	filter	get_rows	host_subject_id	lapply	length	names	nrow	ps.cal	readRDS	sample_data	sort	split	table	type	unique	unlist	which	x
